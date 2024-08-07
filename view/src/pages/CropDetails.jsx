@@ -119,7 +119,7 @@ const CropDetails = ({ cart, setCart }) => {
       setError("");
       //console.log("sending review, ", postReviewData, starValue, params.id);
 
-      const response = await axios.post("/api/v1/reviews/", {
+      const response = await axios.post("https://cropify-deploy.onrender.com/api/v1/reviews/", {
         review: postReviewData,
         rating: starValue,
         crop: params.id,
@@ -186,7 +186,7 @@ const CropDetails = ({ cart, setCart }) => {
   //add to cart
   const getCart = async () => {
     try {
-      const response = await axios.get("/api/v1/cart/mycart");
+      const response = await axios.get("https://cropify-deploy.onrender.com/api/v1/cart/mycart");
       //console.log(response);
       setCart(response.data.data.data.items);
 
@@ -198,7 +198,7 @@ const CropDetails = ({ cart, setCart }) => {
 
   const addToCart = async () => {
     try {
-      const response = await axios.post(`/api/v1/cart/addToCart/${params.id}`);
+      const response = await axios.post(`https://cropify-deploy.onrender.com/api/v1/cart/addToCart/${params.id}`);
       //console.log(response);
       if (response.data.status === "success") {
         setShowSuccessAlert2(true);
