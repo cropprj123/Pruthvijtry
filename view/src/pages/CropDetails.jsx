@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useState, useEffect } from "react";
 import Rating from "@mui/material/Rating";
 import ApiLoading from "../components/ApiLoading";
@@ -32,7 +33,6 @@ import { Transition } from "react-transition-group";
 import React, { useRef } from "react";
 
 import ReviewCard from "../components/ReviewCard";
-
 const CropDetails = ({ cart, setCart }) => {
   const navigate = useNavigate();
   const params = useParams();
@@ -49,41 +49,43 @@ const CropDetails = ({ cart, setCart }) => {
     window.scrollTo(0, 0); // Scroll to the top of the page
   }, []);
 
-  useEffect(() => {
-    async function getSingleCrop() {
-      try {
-        setIsLoading(true);
-        setError("");
+  useEffect(
+    function () {
+      async function getSingleCrop() {
+        try {
+          setIsLoading(true);
+          setError("");
+          const response = await axios.get(
+            `https://cropify-deploy.onrender.com/api/v1/crops/${params.id}`
+          );
+          // //console.log("response data ", response.data.data.data); // Handle the response as needed
+          //console.log("locations", response.data.data.data.storelocation);
 
-        const response = await fetch(
-          `https://cropify-deploy.onrender.com/api/v1/crops/${params.id}`
-        );
+          //console.log("reviews ", response.data.data.data.ratings);
+          setReviews(response.data.data.data.ratings);
 
-        if (!response.ok) {
-          throw new Error("Something went wrong with fetching crops");
+          if (response.status !== 200)
+            throw new Error("Something went wrong with fetching crops");
+
+          const cropData = response.data.data.data;
+          if (cropData.length === 0) {
+            throw new Error("No crops found");
+          }
+          setcropDetails(cropData);
+
+          setIsLoading(false);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setIsLoading(false);
         }
-
-        const data = await response.json();
-        const cropData = data.data.data;
-
-        if (!cropData) {
-          throw new Error("No crops found");
-        }
-
-        setcropDetails(cropData);
-        setReviews(cropData.ratings);
-        setIsLoading(false);
-      } catch (err) {
-        setError(err.message);
-        setIsLoading(false);
       }
-    }
-    getSingleCrop();
-  }, [params.id]);
-
+      getSingleCrop();
+    },
+    [params.id]
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Get user
+  //get user
   const [userData, setUserData] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
   let userHasReviewed;
@@ -94,20 +96,13 @@ const CropDetails = ({ cart, setCart }) => {
   } else {
     userHasReviewed = false;
   }
-
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(
+        const response = await axios.get(
           "https://cropify-deploy.onrender.com/api/v1/users/user"
         );
-
-        if (!response.ok) {
-          throw new Error("Error fetching user data.");
-        }
-
-        const data = await response.json();
-        setUserData(data.user);
+        setUserData(response.data.user);
       } catch (error) {
         console.error("Error fetching user data:", error);
         setError("Error fetching user data. Please try again.");
@@ -120,60 +115,49 @@ const CropDetails = ({ cart, setCart }) => {
     e.preventDefault();
     try {
       setIsSubmitting(true);
-      setError("");
 
-      const response = await fetch(
+      setError("");
+      //console.log("sending review, ", postReviewData, starValue, params.id);
+
+      const response = await axios.post(
         "https://cropify-deploy.onrender.com/api/v1/reviews/",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            review: postReviewData,
-            rating: starValue,
-            crop: params.id,
-            user: userData._id || "", // Add the user ID here
-          }),
+          review: postReviewData,
+          rating: starValue,
+          crop: params.id,
+          user: userData._id || "", // Add the user ID here
         }
       );
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          navigate("/login");
-        } else {
-          throw new Error("Failed to submit review. Please try again.");
-        }
-      }
-
-      const updatedResponse = await fetch(
-        `https://cropify-deploy.onrender.com/api/v1/crops/${params.id}`
-      );
-
-      if (!updatedResponse.ok) {
-        throw new Error("Error fetching updated reviews.");
-      }
-
-      const updatedData = await updatedResponse.json();
-      setReviews(updatedData.data.data.ratings);
+      // Handle the response as needed
+      const updatedResponse = await axios.get(`/api/v1/crops/${params.id}`);
+      setReviews(updatedResponse.data.data.data.ratings);
+      // setSuccessMessage(response.data);
       setShowSuccessAlert(true);
       setTimeout(() => setShowSuccessAlert(false), 2000);
       setOpen(false); // Close the modal after successful submission
     } catch (error) {
-      setError(error.message);
+      if (error.response && error.response.status === 401) {
+        // Redirect to the login page
+        navigate("/login");
+      } else {
+        setError("Failed to submit review. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
+      setIsLoading(false);
+      // setOpen(false); // Close the modal after successful submission
     }
   };
 
   const handleBookEvent = async () => {
     try {
-      await crop(cropDetails._id); // Call the book event function with the event ID
+      await crop(cropDetails._id); // Call the bookevent function with the event ID
     } catch (error) {
       console.error("Error booking event:", error);
     }
   };
 
+  // const [amount, setAmount] = useState(1);
   const [loginError, setLoginError] = useState(false);
 
   const handleBookButtonClick = () => {
@@ -193,41 +177,39 @@ const CropDetails = ({ cart, setCart }) => {
     },
   ];
 
+  //add to cart
+  // const addToCart = () => {
+  //   setCart([...cart, cropDetails]);
+  // };
+
+  //modal
+  const [open, setOpen] = useState(false);
+  const [starValue, setstarValue] = useState(1);
+
+  //add to cart
   const getCart = async () => {
     try {
-      const response = await fetch("/api/v1/cart/mycart");
+      const response = await axios.get("/api/v1/cart/mycart");
+      //console.log(response);
+      setCart(response.data.data.data.items);
 
-      if (!response.ok) {
-        throw new Error("Error fetching cart.");
-      }
-
-      const data = await response.json();
-      setCart(data.data.data.items);
+      //console.log("cart ", cart);
     } catch (error) {
-      console.error(error);
+      //console.log(error);
     }
   };
 
   const addToCart = async () => {
     try {
-      const response = await fetch(`/api/v1/cart/addToCart/${params.id}`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Error adding item to cart.");
-      }
-
-      const data = await response.json();
-
-      if (data.status === "success") {
+      const response = await axios.post(`/api/v1/cart/addToCart/${params.id}`);
+      //console.log(response);
+      if (response.data.status === "success") {
         setShowSuccessAlert2(true);
         setTimeout(() => setShowSuccessAlert2(false), 2000);
       }
-
       getCart();
     } catch (error) {
-      console.error(error);
+      //console.log(error);
     }
   };
 
@@ -237,19 +219,19 @@ const CropDetails = ({ cart, setCart }) => {
       {!isLoading && error && <ErrorMessage message={error} />}
       {!isLoading && !error && (
         <>
-          <div className="mt-10 flex flex-col justify-center lg:flex-row gap-16 px-3 py-2 mx-auto ">
+          <div className="mt-10 flex flex-col justify-center lg:flex-row gap-16  px-3 py-2 mx-auto ">
             <div className="flex flex-col lg:w-1/5 bg-white justify-center border border-gray-300 rounded-xl">
               <img
                 src={cropDetails.image}
                 alt=""
-                className="w-full h-3/5 aspect-square object-contain border-gray-solid"
+                className="w-full h-3/5 aspect-square object-contain  border-gray-solid"
               />
             </div>
             {/* ABOUT */}
             <div className="flex flex-col gap-5 lg:w-2/6 py-2">
               <div>
                 <h1 className="text-3xl font-bold py-2">{cropDetails.name}</h1>
-                <span className="font-semibold text-red-400 ">
+                <span className=" font-semibold text-red-400 ">
                   {cropDetails.type}
                 </span>
                 <hr />
@@ -272,6 +254,10 @@ const CropDetails = ({ cart, setCart }) => {
               <h6 className="text-2xl font-semibold">
                 Price : ₹ <span className="">{cropDetails.price}</span>{" "}
               </h6>
+              {/* <div className="flex items-center">
+                <img src={discount} alt="checkgreen" className="w-7 h-7 mr-2" />
+                <h4 className="text-[1.3rem] text-red-500">you save 10%</h4>
+              </div> */}
               <div className="flex items-center">
                 <img src={shipped} alt="checkgreen" className="w-7 h-7 mr-2" />
                 <h4 className="text-[1rem] text-black">
@@ -286,192 +272,250 @@ const CropDetails = ({ cart, setCart }) => {
               </div>
               <div className="flex items-center">
                 <img src={secure} alt="checkgreen" className="w-7 h-7 mr-2" />
-                <h4 className="text-[1rem] text-black">Secure Transactions</h4>
+                <h4 className="text-[1rem] text-black ">Secure Payments</h4>
+                {/* star */}
+
+                <div className="px-4 flex flex-col justify-center items-center lg:flex-row sm:flex-row min-[400px]:flex-row">
+                  <Rating
+                    name="read-only"
+                    value={cropDetails.avgrating}
+                    readOnly
+                    size="large"
+                  />
+                  {/* from api */}
+                  <h6 className="text-gray-600 ml-2 text-sm md:text-base mt-1">
+                    {cropDetails.reviewCount} reviews
+                  </h6>
+                </div>
               </div>
 
-              <div className="flex flex-col items-start gap-3">
-                <Button
-                  onClick={addToCart}
-                  size="lg"
-                  color="success"
-                  className="w-full"
-                >
-                  Add to Cart
-                </Button>
-                <SnackBar
-                  open={showSuccessAlert2}
-                  message="Item added to cart successfully!"
-                />
-                <Button
+              <div className="flex flex-row items-center gap-12">
+                {/* <div className="flex flex-row items-center">
+                  <button
+                    className="bg-gray-200 py-2 px-5 rounded-lg text-green-500  text-3xl"
+                    onClick={() => setAmount((prev) => Math.max(prev - 1, 1))}
+                  >
+                    -
+                  </button>
+                  <span className="py-4 px-6 rounded-lg">{amount}</span>
+                  <button
+                    className="bg-gray-200 py-2 px-4 rounded-lg text-green-500  text-3xl"
+                    onClick={() => setAmount((prev) => prev + 1)}
+                  >
+                    +
+                  </button>
+                </div> */}
+                <button
+                  className="bg-green-700 hover:bg-green-600  text-white font-semibold py-3 px-16 rounded-xl h-full"
                   onClick={handleBookButtonClick}
-                  size="lg"
-                  color="primary"
-                  className="w-full"
                 >
-                  Book
-                </Button>
-              </div>
-            </div>
-
-            <div className="lg:w-3/6">
-              <Tabs value="html">
-                <TabsHeader className="bg-[#F8F9FA] border rounded-xl">
-                  {data.map(({ label, value }) => (
-                    <Tab key={value} value={value}>
-                      {label}
-                    </Tab>
-                  ))}
-                </TabsHeader>
-                <TabsBody>
-                  {data.map(({ value, desc }) => (
-                    <TabPanel key={value} value={value}>
-                      {desc}
-                    </TabPanel>
-                  ))}
-                </TabsBody>
-              </Tabs>
-            </div>
-          </div>
-          {/* RATINGS */}
-          <div className="mx-auto">
-            <div className="flex flex-row flex-wrap lg:flex-nowrap justify-center lg:gap-20 gap-10 px-3 py-2 mx-auto bg-[#f8f9fa]">
-              <div className="flex flex-col gap-10 lg:w-2/5 bg-white px-5 py-5 border rounded-xl">
-                <h1 className="text-2xl font-bold py-2 border-b">
-                  Customer Reviews
-                </h1>
-                {reviews.length > 0 ? (
-                  reviews.map((review, index) => (
-                    <ReviewCard review={review} key={index} />
-                  ))
+                  Buy Now
+                </button>
+                {cart.find((p) => p.crop.name === cropDetails.name) ? (
+                  <span className="bg-blue-700  text-white font-semibold py-3 px-16 rounded-xl h-full">
+                    Added
+                  </span>
                 ) : (
-                  <p>No reviews available for this crop.</p>
+                  <button
+                    className="bg-green-700 hover:bg-green-600  text-white font-semibold py-3 px-16 rounded-xl h-full"
+                    onClick={addToCart}
+                  >
+                    Add to cart
+                  </button>
+                )}
+                {loginError && (
+                  <SnackBar
+                    isOpen={true}
+                    message="Adding failed. Please try again."
+                    type="error"
+                  />
+                )}
+                {showSuccessAlert2 && (
+                  <SnackBar
+                    isOpen={true}
+                    message="Added to cart!"
+                    type="success"
+                  />
                 )}
               </div>
-              {/* MODAL */}
-              <div className=" lg:w-3/5 px-5 py-5 flex flex-col gap-10 bg-white border rounded-xl">
-                <h1 className="text-2xl font-bold py-2 border-b">Rate Us</h1>
-                <div className="relative w-full max-w-full rounded-lg border-4 border-dashed border-gray-200 p-16 text-center">
+              {/* description */}
+            </div>
+          </div>
+
+          {/* dsaa */}
+          <div className="w-full xl:w-[1100px] mx-auto py-2 px-2">
+            <Tabs id="custom-animation" value="html">
+              <TabsHeader
+                className="bg-transparent w-1/4 px-3"
+                indicatorProps={{
+                  className: "bg-amber-600 shadow-none !text-black-900",
+                }}
+              >
+                {data.map(({ label, value }) => (
+                  <Tab key={value} value={value}>
+                    {label}
+                  </Tab>
+                ))}
+              </TabsHeader>
+              <TabsBody
+                animate={{
+                  initial: { y: 250 },
+                  mount: { y: 0 },
+                  unmount: { y: 250 },
+                }}
+              >
+                {data.map(({ value, desc }) => (
+                  <TabPanel key={value} value={value}>
+                    {desc}
+                  </TabPanel>
+                ))}
+              </TabsBody>
+            </Tabs>
+
+            {/* Reviews and Ratings */}
+            <hr />
+            <div className="m-3 mt-7">
+              <div className="flex items-center gap-4">
+                <Typography level="h3">Ratings and Reviews</Typography>
+                <div>
+                  <Button
+                    variant="outlined"
+                    color="neutral"
+                    startDecorator={<Add />}
+                    onClick={() => {
+                      if (!userData) {
+                        history.push("/login");
+                      } else {
+                        setOpen(true);
+                        setstarValue(1);
+                      }
+                    }}
+                    style={{ display: userHasReviewed ? "none" : "" }}
+                  >
+                    Rate this product?
+                  </Button>
                   <Transition in={open} timeout={400}>
                     {(state) => (
                       <Modal
-                        open
+                        keepMounted
+                        open={!["exited", "exiting"].includes(state)}
                         onClose={() => setOpen(false)}
-                        componentsProps={{
+                        slotProps={{
                           backdrop: {
-                            style: {
-                              opacity: 0.5,
-                              backgroundColor: "black",
-                              transition: "opacity 0.4s",
-                              opacity: state === "entered" ? 1 : 0,
+                            sx: {
+                              opacity: 0,
+                              backdropFilter: "none",
+                              transition: `opacity 400ms, backdrop-filter 400ms`,
+                              ...{
+                                entering: {
+                                  opacity: 1,
+                                  backdropFilter: "blur(8px)",
+                                },
+                                entered: {
+                                  opacity: 1,
+                                  backdropFilter: "blur(8px)",
+                                },
+                              }[state],
                             },
                           },
                         }}
+                        sx={{
+                          visibility: state === "exited" ? "hidden" : "visible",
+                        }}
                       >
                         <ModalDialog
-                          aria-labelledby="basic-modal-dialog-title"
-                          aria-describedby="basic-modal-dialog-description"
+                          className=" w-1/4"
+                          layout="center"
+                          size="lg"
                           sx={{
-                            maxWidth: 500,
-                            borderRadius: "md",
-                            p: 3,
-                            boxShadow: "lg",
+                            opacity: 0,
+                            transition: `opacity 300ms`,
+                            ...{
+                              entering: { opacity: 1 },
+                              entered: { opacity: 1 },
+                            }[state],
                           }}
                         >
-                          <DialogTitle
-                            id="basic-modal-dialog-title"
-                            textColor="inherit"
-                          >
-                            <Typography
-                              component="h2"
-                              level="inherit"
-                              fontSize="1.25em"
-                              mb="0.25em"
-                            >
-                              Rate Us
-                            </Typography>
-                          </DialogTitle>
-                          <DialogContent
-                            id="basic-modal-dialog-description"
-                            sx={{ overflow: "auto" }}
-                          >
-                            <form
-                              className="flex flex-col gap-4"
-                              onSubmit={handleReviewSubmit}
-                            >
+                          <DialogTitle>Review this product</DialogTitle>
+                          <DialogContent>Rating</DialogContent>
+
+                          <form onSubmit={handleReviewSubmit}>
+                            <Rating
+                              name="simple-controlled"
+                              value={starValue}
+                              size="large"
+                              onChange={(event, newValue) => {
+                                setstarValue(newValue);
+                                // onChange = { handleChange };
+                              }}
+                              // onChange={handleStarChange}
+                            />
+                            <Stack spacing={2}>
                               <FormControl>
-                                <FormLabel>Your review</FormLabel>
+                                <FormLabel>Review</FormLabel>
                                 <Textarea
-                                  placeholder="Type your review here..."
-                                  minRows={2}
-                                  value={postReviewData}
-                                  onChange={(e) =>
-                                    setPostReviewData(e.target.value)
-                                  }
+                                  autoFocus
                                   required
+                                  placeholder="Looks like I'm focused "
+                                  value={postReviewData}
+                                  sx={{
+                                    "--Textarea-focused": 1,
+                                  }}
+                                  onChange={(e) => {
+                                    setPostReviewData(e.target.value);
+                                  }}
                                 />
+                                {/* <Input autoFocus required /> */}
                               </FormControl>
-                              <Rating
-                                name="simple-controlled"
-                                value={starValue}
-                                onChange={(event, newValue) => {
-                                  setStarValue(newValue);
-                                }}
-                                required
-                              />
-                              <Stack
-                                direction="row"
-                                justifyContent="flex-end"
-                                gap={1}
-                              >
-                                <Button
-                                  variant="plain"
-                                  color="neutral"
-                                  onClick={() => setOpen(false)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  type="submit"
-                                  disabled={isSubmitting}
-                                  loading={isSubmitting}
-                                >
-                                  Submit
-                                </Button>
-                                {showSuccessAlert && (
-                                  <SnackBar
-                                    open={showSuccessAlert}
-                                    message="Review submitted successfully!"
-                                  />
-                                )}
-                              </Stack>
-                              {reviewError && (
-                                <ErrorMessage message={reviewError} />
-                              )}
-                            </form>
-                          </DialogContent>
+
+                              <Button type="submit">Submit</Button>
+                            </Stack>
+                          </form>
                         </ModalDialog>
                       </Modal>
                     )}
                   </Transition>
-
-                  <button
-                    className="group relative w-full h-40 flex flex-col items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl bg-gray-50 transition hover:bg-gray-100"
-                    onClick={() => setOpen(true)}
-                  >
-                    <span className="text-3xl text-gray-400 transition group-hover:text-gray-600">
-                      <Add />
-                    </span>
-                    <span className="text-xl font-medium text-gray-400 transition group-hover:text-gray-600">
-                      Write a Review
-                    </span>
-                  </button>
                 </div>
               </div>
+              <div>
+                {reviews?.map((d) => (
+                  <>
+                    <ReviewCard
+                      review={d.review}
+                      key={d._id}
+                      rating={d.rating}
+                      date={d.createdAt}
+                      userName={d.user.name}
+                      photo={d.user.photo}
+                    />
+                    <hr />
+                  </>
+                ))}
+
+                {/* <ReviewCard review={reviews.review} />
+                <ReviewCard />
+                <ReviewCard /> */}
+              </div>
+            </div>
+            <Typography level="h4">
+              The above Product is available at the stores below.
+            </Typography>
+            <div>
+              <MapWithStoreLocations
+                storeLocations={cropDetails.storelocation}
+              />
             </div>
           </div>
-          <div className="my-10">
-            <MapWithStoreLocations cropName={cropDetails.name} />
-          </div>
+          {reviewError && (
+            <SnackBar
+              isOpen={true}
+              message="Could not post review."
+              type="error"
+            />
+          )}
+          {showSuccessAlert && (
+            <SnackBar isOpen={true} message="Review Posted !" type="success" />
+          )}
         </>
       )}
     </>
